@@ -115,8 +115,7 @@ local function create_craft_formspec(error_message, name)
 						   "label[".. 7.6 - y + 4 .."," .. ypos + 0.5 ..";" .. count .. "x]"
 			end
 		end
-		formspec = formspec .. "button[8," .. ypos .. ";1,1;" .. result .. ";+]"
-		print("Here: " .. math.ceil(#parsed_recipes/3))
+		formspec = formspec .. "button[8," .. ypos .. ";1,1;recipe_" .. i .. ";+]"
 		if page < num_pages then
 			formspec = formspec .. "button[8,5;1,1;next_page;>]" 
 		end
@@ -246,7 +245,7 @@ minetest.register_on_player_receive_fields(function(player, formname, fields)
 			local result = recipe.name
 			local materials = recipe.used
 			local time_to_craft = recipe.time_to_craft
-			if fields[result] then
+			if fields["recipe_" .. i] then
 				local inventory = minetest.get_inventory({type="player", name=player:get_player_name()})
 				local enough_mats = check_if_player_has_materials(inventory, materials)
 				if enough_mats then
@@ -255,7 +254,7 @@ minetest.register_on_player_receive_fields(function(player, formname, fields)
 					add_hud_icon(player:get_player_name(), result)
 					minetest.show_formspec(player:get_player_name(), "craft:formspec", create_craft_formspec("Crafting " .. minetest.registered_items[result].description:lower() .. ".", player:get_player_name()))
 				else
-					minetest.show_formspec(player:get_player_name(), "craft:formspec", create_craft_formspec("Not enough materials."), player:get_player_name())
+					minetest.show_formspec(player:get_player_name(), "craft:formspec", create_craft_formspec("Not enough materials.", player:get_player_name()))
 				end
 			end
 		end
