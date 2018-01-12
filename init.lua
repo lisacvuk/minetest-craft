@@ -4,6 +4,10 @@ registered_recipes = {{name = "default:cobble", contents = {"default:cobble", "d
 					  {name = "default:furnace", contents = {"default:cobble", "default:cobble", "default:cobble", "default:cobble", "default:cobble", "default:cobble", "default:cobble", "default:cobble", "default:cobble", "default:cobble"}, time_to_craft = 10},
 					  {name = "default:tree", contents = {"default:tree", "default:cobble", "default:wood"}},
 					  {name = "default:pick_diamond", contents = {"default:pick_diamond"}},
+					  {name = "default:stone", contents = {"default:cobble"}},
+					  {name = "default:stone", contents = {"default:cobble"}},
+					  {name = "default:stone", contents = {"default:cobble"}},
+					  {name = "default:stone", contents = {"default:cobble"}},
 }
 -- Contains recipes with just the result and count of materials
 -- example:
@@ -16,6 +20,9 @@ player_craft_queues = {}
 
 -- Contains HUDs for players, indexed by player names.
 player_craft_hud = {}
+
+player_current_page = {}
+
 local step = 0.1
 
 function round(num, numDecimalPlaces)
@@ -61,15 +68,40 @@ local function update_recipes()
 	end
 end
 update_recipes()
-local function create_craft_formspec(error_message)
-	error_message = error_message or ""
-	local formspec = "size[9,6]"
+local function create_error_formspec(error_message)
+	local error_formspec = "size[9,6]" ..
+						   "label[1,1;" .. error_message .. "]"
+	return error_formspec
+end
+local function create_craft_formspec(error_message, name)
 	
-	for i = 1, #parsed_recipes do
+	local items_per_page = 5
+	
+	local num_pages = math.floor(#parsed_recipes/items_per_page)
+	
+	if not name then
+		return create_error_formspec("Name is nil!")
+	end
+	
+	error_message = error_message or ""
+	
+	if not player_current_page[name] then
+		player_current_page[name] = 0
+	end
+	
+	local page = player_current_page[name]
+	local formspec = "size[9,6]"
+	local recipe_offset = (page * items_per_page) + 1
+	
+	
+	for i = recipe_offset, recipe_offset + items_per_page - 1 do--#parsed_recipes do
 		local recipe = parsed_recipes[i]
+		if not recipe then
+			break
+		end
 		local result = recipe.name
 		local materials = recipe.used
-		local ypos = i - 1
+		local ypos = i - recipe_offset
 		formspec = formspec .. "item_image[0," .. ypos .. ";1,1;" .. result .. "]" ..
 				   "label[1," .. ypos + 0.25 .. ";" .. minetest.registered_items[result].description .. "]"
 		for y = 1, #materials do
@@ -78,15 +110,21 @@ local function create_craft_formspec(error_message)
 			if y <= 4 then
 				formspec = formspec .. "item_image[" .. 8 - y.. "," .. ypos .. ";0.5,0.5;" .. name .. "]" ..
 						   "label[".. 7.6 - y .."," .. ypos ..";" .. count .. "x]"
-			else
+			else -- Second row of materials needed, apparently.
 				formspec = formspec .. "item_image[" .. 8 - y + 4 .. "," .. ypos + 0.5 .. ";0.5,0.5;" .. name .. "]" ..
 						   "label[".. 7.6 - y + 4 .."," .. ypos + 0.5 ..";" .. count .. "x]"
 			end
 		end
 		formspec = formspec .. "button[8," .. ypos .. ";1,1;" .. result .. ";+]"
+		print("Here: " .. math.ceil(#parsed_recipes/3))
+		if page < num_pages then
+			formspec = formspec .. "button[8,5;1,1;next_page;>]" 
+		end
+		if page > 0 then
+			formspec = formspec .. "button[7,5;1,1;prev_page;<]"
+		end
 		formspec = formspec .. "label[0,6;" .. error_message .. "]"
 	end
-	
 	return formspec
 end
 function check_if_player_has_materials(inv, mats)
@@ -194,6 +232,15 @@ minetest.register_globalstep(function(dtime)
 end)
 minetest.register_on_player_receive_fields(function(player, formname, fields)
 	if formname == "craft:formspec" then
+		local page = player_current_page[player:get_player_name()] or 0
+		if fields["next_page"] then
+			player_current_page[player:get_player_name()] = page + 1
+			minetest.show_formspec(player:get_player_name(), "craft:formspec", create_craft_formspec("Next page", player:get_player_name()))
+		end
+		if fields["prev_page"] then
+			player_current_page[player:get_player_name()] = page - 1
+			minetest.show_formspec(player:get_player_name(), "craft:formspec", create_craft_formspec("Previous page", player:get_player_name()))
+		end
 		for i = 1, #parsed_recipes do
 			local recipe = parsed_recipes[i]
 			local result = recipe.name
@@ -206,9 +253,9 @@ minetest.register_on_player_receive_fields(function(player, formname, fields)
 					take_items_from_list(inventory, materials)
 					add_to_craft_queue(player:get_player_name(), result, time_to_craft)
 					add_hud_icon(player:get_player_name(), result)
-					minetest.show_formspec(player:get_player_name(), "craft:formspec", create_craft_formspec("Crafting " .. minetest.registered_items[result].description:lower() .. "."))
+					minetest.show_formspec(player:get_player_name(), "craft:formspec", create_craft_formspec("Crafting " .. minetest.registered_items[result].description:lower() .. ".", player:get_player_name()))
 				else
-					minetest.show_formspec(player:get_player_name(), "craft:formspec", create_craft_formspec("Not enough materials."))
+					minetest.show_formspec(player:get_player_name(), "craft:formspec", create_craft_formspec("Not enough materials."), player:get_player_name())
 				end
 			end
 		end
@@ -219,7 +266,7 @@ minetest.register_chatcommand("test_inv", {
 	description = "Test the new inventory. Remove on release.",
 	params = "",
 	func = function(name, param)
-		local formspec = create_craft_formspec("Successfully initialized crafting formspec. Obviously.")
+		local formspec = create_craft_formspec("Successfully initialized crafting formspec. Obviously.", name)
 		minetest.show_formspec(name, "craft:formspec", formspec)
 	end,
 })
